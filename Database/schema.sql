@@ -1,0 +1,31 @@
+CREATE DATABASE IF NOT EXISTS BinSmart;
+USE BinSmart;
+
+DROP TABLE IF EXISTS BinReading;
+DROP TABLE IF EXISTS Bin;
+DROP TABLE IF EXISTS User;
+
+CREATE TABLE User (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    google_id VARCHAR(255) UNIQUE
+);
+
+CREATE TABLE Bin (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    latitude DECIMAL(8, 6) NOT NULL,
+    longitude DECIMAL(9, 6) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    capacity FLOAT NOT NULL,
+    is_full BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE BinReading (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    bin_id INT NOT NULL,
+    distance FLOAT NOT NULL, -- distance from sensor
+    FOREIGN KEY (bin_id) REFERENCES Bin(id) ON DELETE CASCADE
+);
+

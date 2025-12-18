@@ -3,11 +3,18 @@ from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 import os
 from functools import wraps
+from db import db, get_or_create_user
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
+
+# Configure database
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("MYSQL_DATABASE_URI")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db.init_app(app)
 
 # Configure OAuth
 oauth = OAuth(app)
@@ -36,7 +43,15 @@ def authorize():
     token = google.authorize_access_token()
     user_info = token.get('userinfo')
 
+    user = get_or_create_user(
+        google_id=user_info['sub'],
+        email=user_info['email'],
+        username=user_info['name']
+    )
+
     session['user'] = {
+        'id': user.id,
+        'google_id': user_info['sub'],
         'email': user_info['email'],
         'name': user_info['name'],
         'picture': user_info.get('picture')
