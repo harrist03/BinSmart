@@ -111,6 +111,7 @@ def dashboard():
         user=user,
         pubnub_token=pubnub_token,
         pubnub_subscribe_key=os.getenv("PUBNUB_SUBSCRIBE_KEY"),
+        pubnub_publish_key=os.getenv("PUBNUB_PUBLISH_KEY"),
         pubnub_channel=os.getenv("PUBNUB_CHANNEL")
     )   
 

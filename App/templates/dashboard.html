@@ -58,8 +58,15 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Map - Right Side (2/3 width on large screens) -->
                 <div class="lg:col-span-2">
-                    <div class="bg-white rounded-lg shadow p-6">
-                        <h2 class="text-xl font-semibold text-gray-900 mb-4">Bin Locations</h2>
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-xl font-semibold text-gray-900">Bin Locations</h2>
+                            <button onclick="openTestPublishModal()"
+                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition colors">
+                                Publish Test Data
+                            </button>
+                        </div>
+
                         <div id="map" class="w-full h-[600px] rounded-lg"></div>
                     </div>
                 </div>
@@ -80,7 +87,8 @@
 
 {% block scripts %}
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.4.0.min.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key=IzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&callback=initMap" async defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=IzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&callback=initMap" async
+    defer></script>
 
 <script>
     let map;
@@ -113,6 +121,7 @@
     function initPubNub() {
         pubnub = new PubNub({
             subscribeKey: '{{ pubnub_subscribe_key }}',
+            publishKey: '{{ pubnub_publish_key }}',
             userId: 'user-{{ user.id }}'
         });
 
@@ -187,7 +196,7 @@
         try {
             await fetch("/api/sensor/reading", {
                 method: "POST",
-                headers: { "Content-Type": "application/json"},
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     bin_id: binId,
                     distance: distance
@@ -372,7 +381,7 @@
         if (!bin) return;
 
         // Center map on bin
-        map.setCenter({ lat: bin.latitude, lng: bin.longitude});
+        map.setCenter({ lat: bin.latitude, lng: bin.longitude });
         map.setZoom(15);
 
         // Open info window
@@ -381,6 +390,27 @@
         if (marker && infoWindow) {
             Object.values(infoWindows).forEach(iw => iw.close());
             infoWindow.open(map, marker);
+        }
+    }
+
+    function openTestPublishModal() {
+        const binId = prompt("Enter Bin ID");
+        const distance = prompt("Enter distance in cm");
+
+        if (binId && distance) {
+            pubnub.publish({
+                channel: '{{ pubnub_channel }}',
+                message: {
+                    bin_id: parseInt(binId),
+                    distance: parseFloat(distance)
+                }
+            }, (status) => {
+                if (status.error) {
+                    console.error(status.errorData.message);
+                } else {
+                    console.log("Test data published successfully!");
+                }
+            });
         }
     }
 
