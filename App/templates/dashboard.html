@@ -78,3 +78,320 @@
 </div>
 {% endblock %}
 
+{% block scripts %}
+<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.4.0.min.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=IzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&callback=initMap" async defer></script>
+
+<script>
+    let map;
+    let markers = {};
+    let infoWindows = {};
+    let binsData = {};
+    let pubnub;
+    let tokenRefreshInterval;
+
+    // Initialize Google Maps
+    function initMap() {
+        console.log("Initializing map...");
+        map = new google.maps.Map(document.getElementById('map'), {
+            center: { lat: 54.0003, lng: -6.3977 },
+            zoom: 13,
+            styles: [
+                {
+                    featureType: "poi",
+                    elementType: "labels",
+                    stylers: [{ visibility: "off" }]
+                }
+            ]
+        });
+        // Initialize PubNub and load bins
+        initPubNub();
+        loadBins();
+    }
+
+    // Initialize PubNub with PAM token
+    function initPubNub() {
+        pubnub = new PubNub({
+            subscribeKey: '{{ pubnub_subscribe_key }}',
+            userId: 'user-{{ user.id }}'
+        });
+
+        pubnub.setToken('{{ pubnub_token }}');
+
+        // console.log("Token value: ", '{{ pubnub_token }}');
+
+        pubnub.addListener({
+            status: function (statusEvent) {
+                if (statusEvent.category === "PNConnectedCategory") {
+                    console.log("Connected to PubNub");
+                } else if (statusEvent.category === "PNAccessDenied") {
+                    console.error("Access denied, refreshing token...");
+                    refreshToken();
+                }
+            },
+            message: function (event) {
+                console.log("Update received: ", event.message);
+                handleIncomingMessages(event.message);
+            }
+        });
+
+        pubnub.subscribe({
+            channels: ['{{ pubnub_channel }}']
+        });
+        console.log("Subscribing to channel:", '{{ pubnub_channel }}');
+
+        // refresh token every 50 seconds
+        tokenRefreshInterval = setInterval(refreshToken, 50000);
+    }
+
+    async function refreshToken() {
+        try {
+            const res = await fetch("/api/token/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            });
+            const data = await res.json();
+
+            if (data.token) {
+                pubnub.setToken(data.token);
+                console.log("Token refreshed");
+            }
+        } catch (error) {
+            console.error("Error refreshing token: ", error);
+        }
+    }
+
+    async function handleIncomingMessages(data) {
+        const binId = data.bin_id;
+        const distance = data.distance;
+
+        const bin = Object.values(binsData).find(b => b.id === binId);
+        if (!bin) {
+            console.log("Bin not found, calling loadBins() again...");
+            loadBins();
+            return;
+        }
+
+        // Update bin data
+        bin.distance = distance;
+        bin.fill_level = bin.capacity - distance;
+        bin.fill_percentage = (bin.fill_level / bin.capacity) * 100;
+        bin.is_full = distance <= 5;
+
+        // Update UI
+        updateStats();
+        displayBinsList();
+        updateMarker(binId, bin);
+
+        // Save to database
+        try {
+            await fetch("/api/sensor/reading", {
+                method: "POST",
+                headers: { "Content-Type": "application/json"},
+                body: JSON.stringify({
+                    bin_id: binId,
+                    distance: distance
+                })
+            });
+            console.log("Reading saved to database");
+        } catch (error) {
+            console.error("Error saving reading...", error);
+        }
+    }
+
+    // load bins from database
+    async function loadBins() {
+        try {
+            const res = await fetch("/api/bins");
+            const bins = await res.json();
+
+            binsData = {};
+            bins.forEach(bin => {
+                binsData[bin.id] = bin;
+            });
+
+            console.log("Bins data loaded: ", binsData);
+
+            updateStats();
+            displayBinsList();
+            displayMarkers();
+        } catch (error) {
+            console.error("Error loading bins: ", error)
+        }
+    }
+
+    // Update statistics
+    function updateStats() {
+        const bins = Object.values(binsData);
+        const totalBins = bins.length;
+        const fullBins = bins.filter(bin => bin.is_full).length;
+        const avgFill = totalBins > 0 ? (bins.reduce((sum, bin) => sum + bin.fill_percentage, 0) / totalBins).toFixed(2) : 0;
+
+        document.getElementById('totalBins').textContent = totalBins;
+        document.getElementById('fullBins').textContent = fullBins;
+        document.getElementById('avgFill').textContent = avgFill + "%";
+    }
+
+    // Display markers on map
+    function displayMarkers() {
+        const bins = Object.values(binsData);
+
+        if (bins.length > 0) {
+            map.setCenter({ lat: bins[0].latitude, lng: bins[0].longitude });
+        }
+
+        bins.forEach(bin => {
+            if (markers[bin.id]) {
+                updateMarker(bin.id, bin);
+            } else {
+                createMarker(bin);
+            }
+        })
+    }
+
+    // Create marker
+    function createMarker(bin) {
+        const marker = new google.maps.Marker({
+            position: { lat: bin.latitude, lng: bin.longitude },
+            map: map,
+            title: bin.name,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 12,
+                fillColor: getBinColor(bin.fill_percentage, bin.is_full),
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2
+            }
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: createInfoWindowContent(bin)
+        });
+
+        marker.addListener('click', () => {
+            Object.values(infoWindows).forEach(iw => iw.close());
+            infoWindow.setContent(createInfoWindowContent(bin));
+            infoWindow.open(map, marker);
+        });
+
+        markers[bin.id] = marker;
+        infoWindows[bin.id] = infoWindow;
+    }
+
+    // Update existing marker
+    function updateMarker(binId, bin) {
+        const marker = markers[binId];
+        if (!marker) return;
+
+        marker.setIcon({
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 12,
+            fillColor: getBinColor(bin.fill_percentage, bin.is_full),
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+        });
+
+        const infoWindow = infoWindows[binId];
+        if (infoWindow) {
+            infoWindow.setContent(createInfoWindowContent(bin));
+        }
+    }
+
+    // create info window content
+    function createInfoWindowContent(bin) {
+        return `
+            <div class="p-3 min-w-[200px]">
+                <h3 class="font-bold text-lg mb-2">${bin.name}</h3>
+                <p class="text-sm text-gray-600 mb-2">${bin.address}</p>
+                <div class="mb-2">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span>Fill Level:</span>
+                        <span class="font-semibold">${bin.fill_percentage.toFixed(1)}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="${getFillBarColor(bin.fill_percentage, bin.is_full)} h-2 rounded-full" 
+                             style="width: ${bin.fill_percentage}%"></div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500">Distance: ${bin.distance.toFixed(1)} cm</p>
+                <p class="text-xs text-gray-500">Capacity: ${bin.capacity} cm</p>
+                ${bin.is_full ? '<p class="text-xs text-red-600 font-bold mt-2">⚠ BIN IS FULL</p>' : ''}
+            </div>
+        `;
+    }
+
+    // get bin color based on fill percentage
+    function getBinColor(fillPercentage, isFull) {
+        if (isFull || fillPercentage >= 80) return '#ef4444'; // Red
+        if (fillPercentage >= 50) return '#f59e0b'; // Orange
+        return '#22c55e'; // Green
+    }
+
+    // get fill bar color class
+    function getFillBarColor(fillPercentage, isFull) {
+        if (isFull || fillPercentage >= 80) return 'bg-red-500';
+        if (fillPercentage >= 50) return 'bg-orange-500';
+        return 'bg-green-500';
+    }
+
+    // display bins list
+    function displayBinsList() {
+        const bins = Object.values(binsData);
+        const binsList = document.getElementById('binsList');
+
+        if (bins.length === 0) {
+            binsList.innerHTML = '<p class="text-gray-500">No bins found.</p>';
+            return;
+        }
+
+        binsList.innerHTML = bins.map(bin => `
+            <div class="border rounded-lg p-3 hover:bg-gray-50 transition-colors cursor-pointer" onclick="focusBin(${bin.id})">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${getBinColor(bin.fill_percentage, bin.is_full)}"></div>
+                    <h3 class="font-semibold text-sm">${bin.name}</h3>
+                    ${bin.is_full ? '<span class="bg-red-100 text-red-800 text-xs px-1.5 py-0.5 rounded-full font-semibold ml-auto">FULL</span>' : ''}
+                </div>
+                <p class="text-xs text-gray-600 mb-2">${bin.address}</p>
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs text-gray-500">Fill Level</span>
+                    <span class="text-sm font-bold ${bin.is_full ? 'text-red-600' : 'text-gray-900'}">${bin.fill_percentage.toFixed(1)}%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                    <div class="${getFillBarColor(bin.fill_percentage, bin.is_full)} h-1.5 rounded-full transition-all duration-500" 
+                         style="width: ${bin.fill_percentage}%"></div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // focus on bin when clicked in list
+    function focusBin(binId) {
+        const bin = binsData[binId];
+        if (!bin) return;
+
+        // Center map on bin
+        map.setCenter({ lat: bin.latitude, lng: bin.longitude});
+        map.setZoom(15);
+
+        // Open info window
+        const marker = markers[binId];
+        const infoWindow = infoWindows[binId];
+        if (marker && infoWindow) {
+            Object.values(infoWindows).forEach(iw => iw.close());
+            infoWindow.open(map, marker);
+        }
+    }
+
+    // cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (tokenRefreshInterval) {
+            clearInterval(tokenRefreshInterval);
+        }
+        if (pubnub) {
+            pubnub.unsubscribeAll();
+        }
+    });
+</script>
+{% endblock %}

@@ -102,8 +102,9 @@ def dashboard():
     user = session.get('user')
     user_id = f"user-{user['id']}"
 
-    # generate read-only token for regular users
-    pubnub_token = generate_token(user_id, "grant_read", ttl=60)
+    # Generate token based on user role (admins get read-write everywhere)
+    access_type = "grant_read_write" if user.get('is_admin') else "grant_read"
+    pubnub_token = generate_token(user_id, access_type, ttl=60)
 
     return render_template(
         "dashboard.html",
@@ -118,7 +119,7 @@ def dashboard():
 @admin_required
 def admin_panel():
     user = session.get('user')
-    user_id = f"admin-{user['id']}"
+    user_id = f"user-{user['id']}"
 
     # Generate read/write token for admins
     pubnub_token = generate_token(user_id, "grant_read_write", ttl=60)
@@ -186,7 +187,7 @@ def save_sensor_reading():
 
         db.session.commit()
 
-        print(f"Saved reading: Bin {bin.name}, distance: {data['distance']}cm")
+        print(f"Saved reading: {bin.name}, distance: {data['distance']}cm")
 
         return jsonify({
             'success': True,
@@ -198,11 +199,13 @@ def save_sensor_reading():
         print(f"Error saving reading: {e}")
         return jsonify({'error': str(e)}), 500
     
+
 @app.route("/api/token/refresh", methods=["POST"])
 @login_required
 def refresh_pubnub_token():
     user = session.get('user')
-    user_id = f"{'admin' if user.get('is_admin') else 'user'}-{user['id']}"
+    user_id = f"user-{user['id']}"
+
     access_type = "grant_read_write" if user.get('is_admin') else "grant_read"
 
     new_token = generate_token(user_id, access_type, ttl=60)

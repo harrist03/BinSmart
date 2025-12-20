@@ -13,6 +13,9 @@ CREATE TABLE User (
     is_admin BOOLEAN DEFAULT FALSE
 );
 
+INSERT INTO User(username, email, google_id, is_admin) VALUES
+('harrist03', 'harristeh85@gmail.com', '101472572053520235576', 1);
+
 CREATE TABLE Bin (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -25,8 +28,8 @@ CREATE TABLE Bin (
 
 INSERT INTO Bin(name, latitude, longitude, address, capacity, is_full) VALUES 
 ('Bin 1', 54.0003, -6.3977, 'Marshes Shopping Centre', 100, FALSE),
-('Bin 2', 53.9843, 6.3934, 'Dundalk Institute of Technology', 100, FALSE),
-('Bin 3', 53.9877, 6.3752, 'DKIT Sport', 100, FALSE),
+('Bin 2', 53.9843, -6.3934, 'Dundalk Institute of Technology', 100, FALSE),
+('Bin 3', 53.9877, -6.3752, 'DKIT Sport', 100, FALSE),
 ('Bin 4', 53.9884, -6.4009, 'Louth County Hospital', 80, FALSE);
 
 CREATE TABLE BinReading (

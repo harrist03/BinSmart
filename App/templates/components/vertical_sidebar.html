@@ -14,7 +14,12 @@
                 <img class="w-16 h-16 mb-2 rounded-full object-cover" src="{{ user.picture }}" alt="Profile" />
                 <div class="text-center">
                     <p class="font-semibold text-white">{{ user.name }}</p>
-                    <p class="text-sm text-white">{{ user.email }}</p>
+                    <p class="text-sm text-white mb-2">{{ user.email }}</p>
+                    {% if user.is_admin %}
+                    <span class="bg-blue-500/20 text-white px-2 py-1 rounded-lg font-bold">Admin</span>
+                    {% else %}
+                    <span class="bg-green-500/20 text-white px-2 py-1 rounded-lg font-bold">Regular User</span>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -52,7 +57,6 @@
                         <span>Analytics</span>
                     </a>
                 </li>
-                {% if user.is_admin %}
                 <li>
                     <a href="{{ url_for('admin_panel') }}"
                         class="flex items-center gap-3 px-4 py-3 text-white rounded-lg hover:bg-gray-800 transition-colors">
@@ -65,7 +69,6 @@
                         <span>Admin Panel</span>
                     </a>
                 </li>
-                {% endif %}
             </ul>
         </nav>
 
