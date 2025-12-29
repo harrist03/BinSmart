@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, url_for, session, jsonify, r
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 import os
+import requests
 from functools import wraps
 from db import db, get_or_create_user, User, Bin, BinReading
 from pubnub_auth import generate_token
@@ -212,6 +213,99 @@ def refresh_pubnub_token():
     new_token = generate_token(user_id, access_type, ttl=60)
 
     return jsonify({'token': new_token})
+
+@app.route("/api/route/calculate", methods=['POST'])
+@login_required
+def calculate_route():
+    try:
+        data = request.json
+        bin_ids = data.get('bin_ids')
+        origin = data.get('origin')
+
+        # Validate bin ids in database
+        bins = Bin.query.filter(Bin.id.in_(bin_ids)).all()
+
+        if len(bins) == 0:
+            return jsonify({
+                'success': False,
+                'message': 'No valid bins found with provided IDs'
+            }), 404
+
+        # Extract locations for each bin from database
+        waypoints = [f"{bin.latitude},{bin.longitude}" for bin in bins[:-1]]
+        last_bin = bins[-1]
+
+        bins_metadata = []
+        for bin in bins:
+            latest_reading = bin.get_latest_reading()
+            bins_metadata.append({
+                'id': bin.id,
+                'name': bin.name,
+                'location': {'lat': bin.latitude, 'lng': bin.longitude},
+                'address': bin.address,
+                'fill_percentage': latest_reading.fill_percentage
+            })
+
+        # Call Google Directions API
+        api_key = os.getenv("GOOGLE_MAPS_BACKEND_API_KEY")
+        base_url = "https://maps.googleapis.com/maps/api/directions/json"
+
+        params = {
+            'origin': f"{origin['lat']},{origin['lng']}",
+            'destination': f"{last_bin.latitude},{last_bin.longitude}",
+            'mode': 'driving',
+            'key': api_key
+        }
+
+        if len(waypoints) > 0:
+            params['waypoints'] = 'optimize:true|' + '|'.join(waypoints) 
+
+        response = requests.get(base_url, params=params)
+        directions_data = response.json()
+
+        # Google API error handling
+        if directions_data.get('status') != 'OK':
+            return jsonify({
+                'success': False,
+                'message': f"Google Directions API error: {directions_data.get('status')}"
+            }), 400
+        
+        # Extract route data
+        route = directions_data['routes'][0]
+        waypoint_order = route.get('waypoint_order', [])
+
+        # Reorder bins based on Google's optimization
+        if len(waypoint_order) > 0:
+            optimized_bins = [bins_metadata[i] for i in waypoint_order]
+            # Add last bin at the end
+            optimized_bins.append(bins_metadata[-1])
+        else:
+            # only 1 bin (origin -> destination)
+            optimized_bins = bins_metadata
+
+        # Calculate total distance and duration
+        total_distance = 0
+        total_duration = 0
+        for leg in route['legs']:
+            total_distance += leg['distance']['value']
+            total_duration += leg['duration']['value']
+
+        return jsonify({
+            'success': True,
+            'route': {
+                'polyline': route['overview_polyline']['points'],
+                'bounds': route['bounds'],
+                'optimized_bins': optimized_bins,
+                'total_distance_km': round(total_distance / 1000, 2),
+                'total_duration_min': round(total_duration / 60, 1)
+            }
+        })
+    except Exception as e:
+        print(f"Error calculating route: {e}")
+        return jsonify({
+            'success': False,
+            'message': 'Internal server error',
+        }), 500
 
 
 if __name__ == '__main__':

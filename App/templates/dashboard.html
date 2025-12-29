@@ -61,10 +61,16 @@
                     <div class="bg-white rounded-lg shadow p-4">
                         <div class="flex items-center justify-between mb-4">
                             <h2 class="text-xl font-semibold text-gray-900">Bin Locations</h2>
-                            <button onclick="openTestPublishModal()"
-                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition colors">
-                                Publish Test Data
-                            </button>
+                            <div class="flex gap-2">
+                                <button onclick="openTestPublishModal()"
+                                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition colors">
+                                    Publish Test Data
+                                </button>
+                                <button onclick="calculateRoute()"
+                                    class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition colors">
+                                    Calculate Route
+                                </button>
+                            </div>
                         </div>
 
                         <div id="map" class="w-full h-[600px] rounded-lg"></div>
@@ -87,8 +93,9 @@
 
 {% block scripts %}
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.4.0.min.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key=IzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&callback=initMap" async
-    defer></script>
+<script
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&libraries=geometry&callback=initMap"
+    async defer></script>
 
 <script>
     let map;
@@ -97,6 +104,9 @@
     let binsData = {};
     let pubnub;
     let tokenRefreshInterval;
+    let directionsRenderer = null;
+    let currentRoute = null;
+    let routeMarkers = [];
 
     // Initialize Google Maps
     function initMap() {
@@ -149,8 +159,8 @@
         });
         console.log("Subscribing to channel:", '{{ pubnub_channel }}');
 
-        // refresh token every 50 seconds
-        tokenRefreshInterval = setInterval(refreshToken, 50000);
+        // refresh token every 50 minutes
+        tokenRefreshInterval = setInterval(refreshToken, 50 * 60 * 1000);
     }
 
     async function refreshToken() {
@@ -412,6 +422,115 @@
                 }
             });
         }
+    }
+
+    async function calculateRoute() {
+        // get bins that are full
+        const fullBins = Object.values(binsData).filter(bin =>
+            bin.is_full || bin.fill_percentage >= 80
+        );
+
+        if (fullBins.length === 0) {
+            console.log('No full bins found');
+            return;
+        }
+
+        const binIds = fullBins.map(bin => bin.id);
+
+        try {
+            const res = await fetch("/api/route/calculate", {
+                method: "POST",
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bin_ids: binIds,
+                    // test on hardcoded location first
+                    origin: { lat: 53.9912, lng: -6.4003 }
+                })
+            });
+            const routeData = await res.json();
+
+            if (routeData.success) {
+                displayRoute(routeData.route);
+                showRouteInfo(routeData.route);
+            } else {
+                console.error("Error fetching route data...", routeData.message);
+            }
+        } catch (error) {
+            console.error("Error calculating route...", error);
+        }
+    }
+
+    function displayRoute(routeData) {
+        // clear any existing route
+        if (directionsRenderer) {
+            directionsRenderer.setMap(null);
+        }
+
+        // clear numbered markers from prev route
+        routeMarkers.forEach(marker => marker.setMap(null));
+        routeMarkers = [];
+
+        // Decode polyline to create path
+        const decodedPath = google.maps.geometry.encoding.decodePath(routeData.polyline);
+
+        // Draw the polyline directly (instead of using DirectionsRenderer)
+        directionsRenderer = new google.maps.Polyline({
+            path: decodedPath,
+            geodesic: true,
+            strokeColor: '#00FFFF',
+            strokeOpacity: 0.8,
+            strokeWeight: 5,
+            map: map
+        });
+
+        // fit map to show entire route
+        const bounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(routeData.bounds.southwest.lat, routeData.bounds.southwest.lng),
+            new google.maps.LatLng(routeData.bounds.northeast.lat, routeData.bounds.northeast.lng)
+        );
+        map.fitBounds(bounds);
+
+        // add numbered markers for bins in route order
+        routeData.optimized_bins.forEach((bin, index) => {
+            const marker = new google.maps.Marker({
+                position: { lat: bin.location.lat, lng: bin.location.lng },
+                map: map,
+                label: {
+                    text: String(index + 1),
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                },
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 20,
+                    fillColor: "#4F46E5",
+                    fillOpacity: 0.95,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 3
+                },
+                zIndex: 1000
+            });
+
+            // add click handler to show bin info
+            const infoWindow = new google.maps.InfoWindow({
+                content: `
+                <div class="p-2">
+                    <h3 class="font-bold text-sm mb-1">Stop ${index + 1}: ${bin.name}</h3>
+                    <p class="text-xs text-gray-600">${bin.address}</p>
+                    <p class="text-xs text-red-600 font-semibold mt-1">${bin.fill_percentage.toFixed(0)}% full</p>
+                </div>
+            `
+            });
+
+            marker.addListener('click', () => {
+                infoWindow.open(map, marker);
+            });
+
+            routeMarkers.push(marker);
+        });
+
+        console.log("Route displayed successfully!");
     }
 
     // cleanup on page unload
