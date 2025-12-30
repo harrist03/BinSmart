@@ -55,6 +55,23 @@
                     </div>
                 </div>
             </div>
+            <!-- Route calculation and stats -->
+            <div class="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900 mb-2">Route Planning</h2>
+                <div class="flex gap-2">
+                    <input id="origin-search" type="text" placeholder="Enter starting location..."
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-400 outline-none" />
+                    <button onclick="calculateRoute()"
+                        class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition colors">
+                        Calculate Route
+                    </button>
+                    <button onclick="clearRoute()" id="clearRouteBtn"
+                        class="hidden bg-orange-400 text-white px-4 py-2 rounded-lg hover:bg-orange-500 transition colors">
+                        Clear Route
+                    </button>
+                </div>
+                <div id="route-info-container" class="hidden"></div>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Map - Right Side (2/3 width on large screens) -->
                 <div class="lg:col-span-2">
@@ -65,10 +82,6 @@
                                 <button onclick="openTestPublishModal()"
                                     class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition colors">
                                     Publish Test Data
-                                </button>
-                                <button onclick="calculateRoute()"
-                                    class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition colors">
-                                    Calculate Route
                                 </button>
                             </div>
                         </div>
@@ -94,7 +107,7 @@
 {% block scripts %}
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.4.0.min.js"></script>
 <script
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&libraries=geometry&callback=initMap"
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAWkO2Hbr6CLWFSB1ELO4uZ44ZyzGL7W3s&libraries=geometry,places&callback=initMap"
     async defer></script>
 
 <script>
@@ -107,6 +120,8 @@
     let directionsRenderer = null;
     let currentRoute = null;
     let routeMarkers = [];
+    let autocomplete;
+    let selectedOrigin = null;
 
     // Initialize Google Maps
     function initMap() {
@@ -122,6 +137,29 @@
                 }
             ]
         });
+        const input = document.getElementById('origin-search');
+        autocomplete = new google.maps.places.Autocomplete(input, {
+            fields: ['geometry', 'formatted_address', 'name']
+        });
+
+        // when user enters a place
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (!place.geometry || !place.geometry.location) {
+                alert("Please select a valid location from the dropdown");
+                selectedOrigin = null;
+                return;
+            }
+
+            selectedOrigin = {
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng(),
+                address: place.formatted_address || place.name
+            };
+
+            console.log('Origin selected: ', selectedOrigin);
+        });
+
         // Initialize PubNub and load bins
         initPubNub();
         loadBins();
@@ -425,6 +463,10 @@
     }
 
     async function calculateRoute() {
+        if (!selectedOrigin) {
+            alert('Please select a starting location first.');
+            return;
+        }
         // get bins that are full
         const fullBins = Object.values(binsData).filter(bin =>
             bin.is_full || bin.fill_percentage >= 80
@@ -444,7 +486,7 @@
                 body: JSON.stringify({
                     bin_ids: binIds,
                     // test on hardcoded location first
-                    origin: { lat: 53.9912, lng: -6.4003 }
+                    origin: { lat: selectedOrigin.lat, lng: selectedOrigin.lng }
                 })
             });
             const routeData = await res.json();
@@ -452,6 +494,8 @@
             if (routeData.success) {
                 displayRoute(routeData.route);
                 showRouteInfo(routeData.route);
+                document.getElementById('clearRouteBtn').classList.remove('hidden');
+                document.getElementById('origin-search').value = '';
             } else {
                 console.error("Error fetching route data...", routeData.message);
             }
@@ -473,7 +517,7 @@
         // Decode polyline to create path
         const decodedPath = google.maps.geometry.encoding.decodePath(routeData.polyline);
 
-        // Draw the polyline directly (instead of using DirectionsRenderer)
+        // Draw the polyline
         directionsRenderer = new google.maps.Polyline({
             path: decodedPath,
             geodesic: true,
@@ -490,6 +534,29 @@
         );
         map.fitBounds(bounds);
 
+        // add starting marker
+        const startMarker = new google.maps.Marker({
+            position: { lat: selectedOrigin.lat, lng: selectedOrigin.lng },
+            map: map,
+            label: {
+                text: 'S',
+                color: 'white',
+                fontSize: '10px',
+                fontWeight: 'bold'
+            },
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 12,
+                fillColor: '#22c55e', 
+                fillOpacity: 1,
+                strokeColor: '#ffffff',
+                strokeWeight: 2
+            },
+            zIndex: 1001
+        });
+
+        routeMarkers.push(startMarker);
+
         // add numbered markers for bins in route order
         routeData.optimized_bins.forEach((bin, index) => {
             const marker = new google.maps.Marker({
@@ -498,16 +565,16 @@
                 label: {
                     text: String(index + 1),
                     color: 'white',
-                    fontSize: '14px',
+                    fontSize: '10px',
                     fontWeight: 'bold'
                 },
                 icon: {
                     path: google.maps.SymbolPath.CIRCLE,
-                    scale: 20,
-                    fillColor: "#4F46E5",
-                    fillOpacity: 0.95,
+                    scale: 12,
+                    fillColor: "#4169E1",
+                    fillOpacity: 1,
                     strokeColor: '#ffffff',
-                    strokeWeight: 3
+                    strokeWeight: 2
                 },
                 zIndex: 1000
             });
@@ -531,6 +598,100 @@
         });
 
         console.log("Route displayed successfully!");
+    }
+
+    function showRouteInfo(routeData) {
+        const container = document.getElementById('route-info-container');
+
+        // Format distance and duration
+        const totalDistance = routeData.total_distance_km
+        const totalDuration = routeData.total_duration_min
+
+        container.innerHTML = `
+            <div class="bg-white rounded-lg p-4 border border-gray-300 mt-3">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="font-semibold text-gray-800">Route Summary</h4>
+                    <div class="flex gap-4 text-sm">
+                        <span class="text-gray-600">
+                            <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                            </svg>
+                            <strong>${totalDistance} km</strong>
+                        </span>
+                        <span class="text-gray-600">
+                            <svg class="inline w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <strong>${totalDuration} mins</strong>
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="space-y-2">
+                    <div class="text-sm">
+                        <div class="flex items-start gap-2 py-2 border-b">
+                            <span class="flex-shrink-0 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center text-white text-xs font-bold">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                            </span>
+                            <div class="flex-1">
+                                <p class="font-medium text-gray-800">Start: ${selectedOrigin.address}</p>
+                            </div>
+                        </div>
+                        
+                        ${routeData.optimized_bins.map((bin, index) => `
+                            <div class="flex items-start gap-2 py-2 border-b">
+                                <span class="flex-shrink-0 w-6 h-6 rounded-full bg-blue-400 flex items-center justify-center text-white text-xs font-bold">
+                                    ${index + 1}
+                                </span>
+                                <div class="flex-1">
+                                    <p class="font-medium text-gray-800">${bin.name}</p>
+                                    <p class="text-xs text-gray-500">${bin.address}</p>
+                                    <p class="text-xs text-red-600 font-semibold">${bin.fill_percentage.toFixed(0)}% full</p>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.classList.remove('hidden');
+        console.log("Route info displayed");
+    }
+
+    function clearRoute() {
+        // remove route polyline
+        if (directionsRenderer) {
+            directionsRenderer.setMap(null);
+            directionsRenderer = null;
+        }
+
+        // remove numbered markers
+        routeMarkers.forEach(marker => marker.setMap(null));
+        routeMarkers = [];
+
+        // hide route info panel
+        const container = document.getElementById('route-info-container');
+        container.classList.add('hidden');
+        container.innerHTML = '';
+
+        // hide clear button
+        document.getElementById('clearRouteBtn').classList.add('hidden');
+        selectedOrigin = null;
+
+        // reset map view to show all bins
+        if (Object.keys(binsData).length > 0) {
+            const bins = Object.values(binsData);
+            const bounds = new google.maps.LatLngBounds();
+            bins.forEach(bin => {
+                bounds.extend(new google.maps.LatLng(bin.latitude, bin.longitude));
+            });
+            map.fitBounds(bounds);
+        }
+
+        console.log("Route cleared");
     }
 
     // cleanup on page unload
