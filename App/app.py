@@ -73,6 +73,12 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'user' not in session:
             return redirect(url_for("unauthorized"))
+        
+        user = session.get('user')
+        db_user = User.query.get(user['id'])
+        if db_user:
+            session['user']['is_admin'] = db_user.is_admin
+
         return f(*args, **kwargs)
     return decorated_function
 
@@ -121,18 +127,12 @@ def dashboard():
 @admin_required
 def admin_panel():
     user = session.get('user')
-    user_id = f"user-{user['id']}"
-
-    # Generate read/write token for admins
-    pubnub_token = generate_token(user_id, "grant_read_write", ttl=60)
+    users = User.query.all()
 
     return render_template(
         "admin_panel.html",
         user=user,
-        pubnub_token=pubnub_token,
-        pubnub_subscribe_key=os.getenv("PUBNUB_SUBSCRIBE_KEY"),
-        pubnub_publish_key=os.getenv("PUBNUB_PUBLISH_KEY"),
-        pubnub_channel=os.getenv("PUBNUB_CHANNEL")
+        users=users
     )
 
 @app.route("/api/bins")
@@ -306,6 +306,32 @@ def calculate_route():
             'success': False,
             'message': 'Internal server error',
         }), 500
+    
+@app.route("/api/users/<int:user_id>/admin", methods=["PUT"])
+@login_required
+@admin_required
+def update_admin_status(user_id):
+    try:
+        current_user = session.get('user')
+
+        if current_user['id'] == user_id:
+            return jsonify({'success': False, 'message': 'You cannot modify your own admin status'}), 403
+        
+        data = request.get_json()
+        is_admin = data.get('is_admin')
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found.'}), 404
+        
+        user.is_admin = is_admin
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': f'User {user.id} admin status has been updated successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error updating admin status:  {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 if __name__ == '__main__':

@@ -1,4 +1,74 @@
 {% extends "layout.html" %}
 {% block content %}
-<p>Admin Page</p>
+<div class="min-h-screen bg-gray-50 flex">
+    {% include 'components/vertical_sidebar.html' %}
+    <div class="flex-1 p-8 ml-64">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">Admin Panel</h2>
+        <div class="max-w-full">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Admin Privileges</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if users %}
+                    {% for user_item in users %}
+                    <tr>
+                        <td>{{ user_item.id }}</td>
+                        <td>{{ user_item.username }}</td>
+                        <td>{{ user_item.email }}</td>
+                        <td>
+                            {{ 'Admin' if user_item.is_admin else 'Regular User' }}
+                        </td>
+                        <td>
+                            {% if user_item.id != user.id %}
+                            <input type="checkbox" {% if user_item.is_admin %} checked {% endif %}
+                                onchange="toggleAdminStatus({{ user_item.id }}, this.checked)" />
+                            {% else %}
+                            <p>Current user</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="5">No users found.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function toggleAdminStatus(userId, isAdmin) {
+        try {
+            const res = await fetch(`/api/users/${userId}/admin`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_admin: isAdmin })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                console.log(`User ${userId} admin status has been updated to ${isAdmin}`);
+            } else {
+                console.error("Error updating user admin status: ", data.message);
+            }
+            location.reload();
+        } catch (error) {
+            console.error("Error updating admin status: ", error);
+            location.reload();
+        }
+    }
+</script>
 {% endblock %}
