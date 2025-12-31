@@ -5,43 +5,53 @@
     <div class="flex-1 p-8 ml-64">
         <h2 class="text-2xl font-bold text-gray-800 mb-6">Admin Panel</h2>
         <div class="max-w-full">
-            <table>
-                <thead>
+            <table class="min-w-full rounded-xl shadow overflow-hidden">
+                <thead class="bg-blue-300">
                     <tr>
-                        <th>#</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Admin Privileges</th>
+                        <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider">#</th>
+                        <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-3 text-left font-semibold uppercase tracking-wider">Admin Privileges</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="bg-white divide-y divide-gray-200">
                     {% if users %}
                     {% for user_item in users %}
-                    <tr>
-                        <td>{{ user_item.id }}</td>
-                        <td>{{ user_item.username }}</td>
-                        <td>{{ user_item.email }}</td>
-                        <td>
-                            {{ 'Admin' if user_item.is_admin else 'Regular User' }}
-                        </td>
-                        <td>
-                            {% if user_item.id != user.id %}
-                            <input type="checkbox" {% if user_item.is_admin %} checked {% endif %}
-                                onchange="toggleAdminStatus({{ user_item.id }}, this.checked)" />
+                    <tr class="hover:bg-blue-50 transition-colors">
+                        <td class="px-6 py-3">{{ user_item.id }}</td>
+                        <td class="px-6 py-3">{{ user_item.username }}</td>
+                        <td class="px-6 py-3">{{ user_item.email }}</td>
+                        <td class="px-6 py-3">
+                            {% if user_item.is_admin %}
+                            <span class="bg-blue-500/60 text-white px-2 py-1 rounded-lg font-bold">Admin</span>
                             {% else %}
-                            <p>Current user</p>
+                            <span class="bg-green-500/60 text-white px-2 py-1 rounded-lg font-bold">Regular User</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-3">
+                            {% if user_item.id != user.id %}
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" class="sr-only peer" {% if user_item.is_admin %}checked{% endif
+                                    %} onchange="toggleAdminStatus({{ user_item.id }}, this.checked)">
+                                <div
+                                    class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500">
+                                </div>
+                            </label>
+                            {% else %}
+                            <span class="text-gray-600">
+                                You
+                            </span>
                             {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
                     {% else %}
                     <tr>
-                        <td colspan="5">No users found.</td>
+                        <td colspan="5" class="px-6 py-3">No users found.</td>
                     </tr>
                     {% endif %}
                 </tbody>
-
             </table>
         </div>
     </div>
