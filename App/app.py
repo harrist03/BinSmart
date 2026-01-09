@@ -199,7 +199,7 @@ def save_sensor_reading():
     except Exception as e:
         db.session.rollback()
         print(f"Error saving reading: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'message': str(e)}), 500
     
 
 @app.route("/api/token/refresh", methods=["POST"])

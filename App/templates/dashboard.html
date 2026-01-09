@@ -247,7 +247,7 @@
 
         // Save to database
         try {
-            await fetch("/api/sensor/reading", {
+            const res = await fetch("/api/sensor/reading", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -255,10 +255,13 @@
                     distance: distance
                 })
             });
-            if (data.success) {
+
+            const result = await res.json()
+
+            if (res.ok && result.success) {
                 console.log("Reading saved to database");
             } else {
-                console.error("Error saving reading message: ", data.message);
+                console.error("Error saving reading message: ", result.message);
             }
         } catch (error) {
             console.error("Error saving reading...", error);
