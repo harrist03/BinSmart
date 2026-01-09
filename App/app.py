@@ -175,7 +175,7 @@ def save_sensor_reading():
             return jsonify({'success': False, 'message': 'Invalid bin_id'}), 400
         
         # Validate distance is reasonable
-        if data['distance'] < 0 or data['distance'] > bin.capacity * 1.2:
+        if data['distance'] < 0 or data['distance'] > bin.capacity:
             return jsonify({'success': False, 'message': 'Invalid distance reading'}), 400
         
         # Create new reading

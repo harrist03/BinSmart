@@ -229,7 +229,7 @@
             return;
         }
 
-        if (distance < 0 || distance > bin.capacity * 1.2) {
+        if (distance < 0 || distance > bin.capacity) {
             console.error(`Invalid distance reading: ${distance}cm, likely due to sensor calibrating. Ignoring update...`);
             return;
         }
