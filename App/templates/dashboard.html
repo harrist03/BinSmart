@@ -229,6 +229,11 @@
             return;
         }
 
+        if (distance < 0 || distance > bin.capacity * 1.2) {
+            console.error(`Invalid distance reading: ${distance}cm, likely due to sensor calibrating. Ignoring update...`);
+            return;
+        }
+
         // Update bin data
         bin.distance = distance;
         bin.fill_level = bin.capacity - distance;
@@ -250,7 +255,11 @@
                     distance: distance
                 })
             });
-            console.log("Reading saved to database");
+            if (data.success) {
+                console.log("Reading saved to database");
+            } else {
+                console.error("Error saving reading message: ", data.message);
+            }
         } catch (error) {
             console.error("Error saving reading...", error);
         }

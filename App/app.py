@@ -167,16 +167,16 @@ def save_sensor_reading():
 
         # Validate data
         if not data.get('bin_id') or data.get('distance') is None:
-            return jsonify({'error': 'Missing bin_id or distance'}), 400
+            return jsonify({'success': False, 'message': 'Missing bin_id or distance'}), 400
         
         # Validate bin exists
         bin = Bin.query.get(data['bin_id'])
         if not bin:
-            return jsonify({'error': 'Invalid bin_id'}), 400
+            return jsonify({'success': False, 'message': 'Invalid bin_id'}), 400
         
         # Validate distance is reasonable
         if data['distance'] < 0 or data['distance'] > bin.capacity * 1.2:
-            return jsonify({'error': 'Invalid distance reading'}), 400
+            return jsonify({'success': False, 'message': 'Invalid distance reading'}), 400
         
         # Create new reading
         reading = BinReading(
@@ -185,7 +185,7 @@ def save_sensor_reading():
         )
         db.session.add(reading)
 
-        bin.is_full = data['distance'] <= 5
+        bin.is_full = data['distance'] <= 7
 
         db.session.commit()
 
