@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from pubnub.pnconfiguration import PNConfiguration
 from pubnub.pubnub import PubNub
+import requests
 
 load_dotenv()
 
@@ -25,6 +26,9 @@ GPIO.setup(RED_LED_PIN, GPIO.OUT)
 
 GPIO.output(GREEN_LED_PIN, False)
 GPIO.output(RED_LED_PIN, False)
+
+FLASK_API_URL = os.getenv("FLASK_API_URL")
+HARDWARE_API_KEY = os.getenv("HARDWARE_API_KEY")
 
 BIN_ID = os.getenv("PUBNUB_BIN_ID")
 PUBNUB_CHANNEL = os.getenv("PUBNUB_CHANNEL")
@@ -111,6 +115,24 @@ def publish_to_pubnub(distance):
         return False
 
 
+def save_to_database(bin_id, distance):
+    try:
+        response = requests.post(
+                f"{FLASK_API_URL}/api/sensor/reading/hardware",
+                json={'bin_id': bin_id, 'distance': distance},
+                headers={'API-Key': HARDWARE_API_KEY},
+                timeout=5
+            )
+        if response.ok:
+            print(f"Saved to database: {response.json()}")
+            return True
+        else:
+            print(f"Failed to save to database: {response.json()}")
+            return False
+    except Exception as e:
+        print(f"Error saving to database: {e}")
+        return False
+
 try:
     last_published_distance = None
     last_publish_time = 0
@@ -120,7 +142,10 @@ try:
             update_leds(distance)
 
             if should_publish(distance, last_published_distance, last_publish_time):
-                if publish_to_pubnub(distance):
+                pubnub_success = publish_to_pubnub(distance)
+                db_success = save_to_database(int(BIN_ID), round(distance,2))
+
+                if pubnub_success or db_success:
                     last_published_distance = distance
                     last_publish_time = time.time()
                     print("Distance: " + str(distance))
