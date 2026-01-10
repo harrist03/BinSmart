@@ -161,10 +161,23 @@ def get_bins():
 
 @app.route("/api/sensor/reading", methods=['POST'])
 @login_required
-def save_sensor_reading():
-    try:
-        data = request.json
+def save_sensor_reading_frontend():
+    data = request.json
+    return save_sensor_reading(data)
 
+
+@app.route("/api/sensor/reading/hardware", methods=["POST"])
+def save_sensor_reading_hardware():
+    api_key = request.headers.get('API-Key')
+    if api_key != os.getenv('HARDWARE_API_KEY'):
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 400
+    
+    data = request.json
+    return save_sensor_reading(data)
+
+    
+def save_sensor_reading(data):
+    try:
         # Validate data
         if not data.get('bin_id') or data.get('distance') is None:
             return jsonify({'success': False, 'message': 'Missing bin_id or distance'}), 400
@@ -199,8 +212,8 @@ def save_sensor_reading():
     except Exception as e:
         db.session.rollback()
         print(f"Error saving reading: {e}")
-        return jsonify({'success': False, 'message': str(e)}), 500
-    
+        return jsonify({'success': False, 'message': str(e)}), 500    
+
 
 @app.route("/api/token/refresh", methods=["POST"])
 @login_required
@@ -335,4 +348,4 @@ def update_admin_status(user_id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -246,26 +246,26 @@
         updateMarker(binId, bin);
 
         // Save to database
-        try {
-            const res = await fetch("/api/sensor/reading", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    bin_id: binId,
-                    distance: distance
-                })
-            });
+        // try {
+        //     const res = await fetch("/api/sensor/reading", {
+        //         method: "POST",
+        //         headers: { "Content-Type": "application/json" },
+        //         body: JSON.stringify({
+        //             bin_id: binId,
+        //             distance: distance
+        //         })
+        //     });
 
-            const result = await res.json()
+        //     const result = await res.json()
 
-            if (res.ok && result.success) {
-                console.log("Reading saved to database");
-            } else {
-                console.error("Error saving reading message: ", result.message);
-            }
-        } catch (error) {
-            console.error("Error saving reading...", error);
-        }
+        //     if (res.ok && result.success) {
+        //         console.log("Reading saved to database");
+        //     } else {
+        //         console.error("Error saving reading message: ", result.message);
+        //     }
+        // } catch (error) {
+        //     console.error("Error saving reading...", error);
+        // }
     }
 
     // load bins from database
@@ -497,7 +497,6 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     bin_ids: binIds,
-                    // test on hardcoded location first
                     origin: { lat: selectedOrigin.lat, lng: selectedOrigin.lng }
                 })
             });
