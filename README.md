@@ -23,11 +23,56 @@ BinSmart is a smart waste management system that monitors trash bin fill levels 
 ## 🏗️ System Architecture
 ![System Architecture image](/Hardware/System_Architecture.png)
 
-### Hardware Layer
+---
+### Device Layer
 **Hardware components:**
 - Raspberry Pi
-- HC-SR04 ultrasonic sensor
-- LEDs for physical bin status indication
+- HC-SR04 ultrasonic sensor: measure the bin's fill level
+- Red and Green LEDs: physical bin status indication (red = full, green = not full)
+
+**Note:**
+- A 220Ohm resistor is used to prevent damage to the LEDs
+- A 1kOhm and a 2kOhm resistor to used to allow the ECHO pin in the ultrasonic sensor to have 3.3V power.
+
+**Data Flow:**
+1. Ultrasonic sensor measures distance to trash surface
+2. The distance undergoes validation checking (filter abnormal values)
+3. LEDs update based on threshold (red if distance <= 7cm)
+4. Data is sent to the flask app using a secured API key and is saved in the database
+5. Data published to PubNub `bin_data` channel for real-time updates
+
+---
+### Communication Layer
+**PubNub Real-Time Messaging:**
+- Acts as the message broker between devices and web clients
+- Devices publish sensor readings to `bin_data` channel
+- Flask app subscribes to receive real-time updates
+
+**Message Format:**
+```json
+{
+  "bin_id": "1",
+  "distance": 20
+}
+```
+---
+### Backend / Web Server Layer
+- **Nginx** acts as a reverse proxy and handles incoming HTTP requests.
+- **Gunicorn** serves as the WSGI server, interfacing between Nginx and the Flask app.
+- **Flask**: Application server that processes business logic, authentication, and API endpoints
+
+---
+### Database Layer / Design
+The database schema is defined using a SQL schema file `schema.sql` located in the **Database** folder , which specifies the structure of tables, relationships, and constraints used by the application.
+
+A MySQL database is used to store:
+- Bin metadata
+- Sensor readings
+- User and role information
+
+---
+
+
 
 ## 🧩 Fritzing Diagram
 ![Fritzing Diagram Image](/Hardware/Fritzing_diagram.png)
