@@ -191,6 +191,9 @@ def save_sensor_reading(data):
         if data['distance'] < 0 or data['distance'] > bin.capacity:
             return jsonify({'success': False, 'message': 'Invalid distance reading'}), 400
         
+        fill_level = bin.capacity - data['distance']
+        fill_percentage = (fill_level / bin.capacity) * 100 if bin.capacity > 0 else 0
+
         # Create new reading
         reading = BinReading(
             bin_id=data['bin_id'],
@@ -198,7 +201,7 @@ def save_sensor_reading(data):
         )
         db.session.add(reading)
 
-        bin.is_full = data['distance'] <= 7
+        bin.is_full = fill_percentage >= 80
 
         db.session.commit()
 
@@ -207,7 +210,7 @@ def save_sensor_reading(data):
         return jsonify({
             'success': True,
             'message': 'Reading saved',
-            'fill_percentage': reading.fill_percentage
+            'fill_percentage': fill_percentage
         })
     except Exception as e:
         db.session.rollback()

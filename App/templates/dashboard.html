@@ -238,7 +238,7 @@
         bin.distance = distance;
         bin.fill_level = bin.capacity - distance;
         bin.fill_percentage = (bin.fill_level / bin.capacity) * 100;
-        bin.is_full = distance <= 5;
+	bin.is_full = bin.fill_percentage >= 80;
 
         // Update UI
         updateStats();
