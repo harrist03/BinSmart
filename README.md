@@ -1,6 +1,6 @@
 # BinSmart
 
-BinSmart is a smart waste management system that monitors trash bin fill levels and visualizes them on an interactive map, allowing users to view bin status in real time and optimize collection routes, reducing unnecessary trips, fuel consumption, and operational costs.
+BinSmart is a smart waste management system that monitors trash bin fill levels and visualizes them on an interactive map, allowing users to view bin status in real time and optimize collection routes, reducing unnecessary trips, fuel consumption, and operational costs. Visit it [here](https://binsmart.live).
 
 ## 🛠️ Technologies Used
 
@@ -33,13 +33,6 @@ BinSmart is a smart waste management system that monitors trash bin fill levels 
 **Note:**
 - A 220Ohm resistor is used to prevent damage to the LEDs
 - A 1kOhm and a 2kOhm resistor to used to allow the ECHO pin in the ultrasonic sensor to have 3.3V power.
-
-**Data Flow:**
-1. Ultrasonic sensor measures distance to trash surface
-2. The distance undergoes validation checking (filter abnormal values)
-3. LEDs update based on threshold (red if distance <= 7cm)
-4. Data is sent to the flask app using a secured API key and is saved in the database
-5. Data published to PubNub `bin_data` channel for real-time updates
 
 ---
 ### Communication Layer
